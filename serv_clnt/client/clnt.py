@@ -8,6 +8,8 @@ import cv2
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QThread, pyqtSlot
 from PyQt5 import QtCore
+from PyQt5 import QtWidgets
+from PyQt5 import QtGui
 from PyQt5 import uic
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QCoreApplication
@@ -71,7 +73,8 @@ class Login():
         send_msg = f"login/{id}/{pw}"
         sock.send(send_msg.encode())
         recv_msg = sock.recv(BUF_SIZE)
-        if "ok" in recv_msg:
+        recv_msg = recv_msg.decode()
+        if "OK" in recv_msg:
             window = main_window()
             self.close()
             window.exec_()
@@ -100,7 +103,8 @@ class signup():
         send_msg = f"id_check/{id}"
         sock.send(send_msg.encode())
         recv_msg = sock.recv(BUF_SIZE)
-        if "ok" in recv_msg:
+        recv_msg = recv_msg.decode()
+        if "OK" in recv_msg:
             QMessageBox().about(self, "확인 완료", "아이디가 중복되지 않습니다.")
         else:
             QMessageBox().about(self, "아이디 중복", "중복되는 아이디입니다.\n 다시 시도해주세요.")
@@ -116,7 +120,8 @@ class signup():
         send_msg = f"signup/{id}/{pw}/{name}"
         sock.send(send_msg.encode())
         recv_msg = sock.recv(BUF_SIZE)
-        if "ok" in recv_msg:
+        recv_msg = recv_msg.decode()
+        if "OK" in recv_msg:
             QMessageBox().about(self, "회원가입 성공", "가입을 환영합니다.")
             self.close()
         else:
@@ -138,9 +143,20 @@ class main_window():
         window.exec_()
   
 class capture():
+    flag = 0
+    cam = cv2.VideoCapture(0)
+    
+    ret, frame = cam.read()
+    height, width = frame.shape[:2]
+    
+    VideoSignal1 = QtCore.pyqtSignal(QtGui.QImage)
+    VideoSignal2 = QtCore.pyqtSignal(QtGui.QImage)
+    
     def __init__(self):
         super().__init__()
         self.ui = uic.loadUi("ui/capture.ui", self)
+        
+        
         
         
  
