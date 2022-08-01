@@ -8,20 +8,24 @@ import cv2
 import h5py
 from numpy import argmax 
 from keras.models import load_model
+from paramiko import HostKeys
 import pymysql
 
-from fishgo.serv_clnt.client.clnt import BUF_SIZE 
+host = '127.0.0.1'
+port = 9011
  
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 #분류할 카테고리 지정
 categories = ["Tuna", "Sunfish", "Octopus", "Mackerel", "Cutlassfish"]
+ko_categories = ["참치", "개복치", "문어", "고등어", "갈치"]
 pr = ['height', 'width', '']
 
 image_dir = "C:/Codes/iim/" #테스트할 이미지 폴더 경로
 img_path = 'C:/Codes/iim/Image.png'
 sock_list = []
-thread_list = []
+# thread_list = []
+BUF_SIZE = 1024
 
 def Dataization(img_path): 
     image_w = 28 
@@ -31,7 +35,7 @@ def Dataization(img_path):
     return (img/256) 
   
 def con_db():
-    con = pymysql.connect(host = '127.0.0.1', user='root', 
+    con = pymysql.connect(host = '10.10.20.44', user='admin', 
                           password='1234', db='fishgo')
     cur = con.cursor()
     return con, cur
@@ -50,24 +54,24 @@ class TCPServer(threading.Thread):
     def run(self):
         global sock_list, thread_list
         try:
+            print( 'tcp server :: server wait...')
             while True:
-                print( 'tcp server :: server wait...')
                 sock, clnt_addr = self.serverSocket.accept()
                 sock_list.append(sock)
                 print("tcp server :: connect :", clnt_addr)
     
                 subThread = TCPServerThread(sock, clnt_addr)
                 subThread.start()
-                thread_list.append(subThread)
+                # thread_list.append(subThread)
         except:
             print("tcp server :: serverThread error")
  
-    def sendAll(self, message):
-        try:
-            self.thread_list[0].send(message)
-        except:
-            pass
- 
+    # def sendAll(self, message):
+    #     try:
+    #         self.thread_list[0].send(message)
+    #     except:
+    #         pass
+
 class TCPServerThread(threading.Thread):
     def __init__(self, sock, clnt_addr):
         threading.Thread.__init__(self)
@@ -81,20 +85,24 @@ class TCPServerThread(threading.Thread):
             recv_msg = self.sock.recv(BUF_SIZE)
             if not recv_msg:
                 sock_list.remove(self.sock)
-                thread_list.remove(self)
+                # thread_list.remove(self)
                 break
             recv_msg = recv_msg.decode()
-            
+            print(recv_msg)
             if recv_msg.startswith('login/'):
                 self.login(recv_msg)
+            elif recv_msg.startswith('id_check/'):
+                self.id_check(recv_msg)
             elif recv_msg.startswith('signup/'):
                 self.signup(recv_msg)
-            
+            elif recv_msg.startswith('compare'):
+                self.compare_fish()
                 
     def login(self, recv_msg):
         con, cur = con_db()
         recv_list = recv_msg.split('/')
-        query = f"SELECT userpw FROM user WHERE userid={recv_list[1]}"
+        query = f"SELECT userpw FROM user WHERE userid=\'{recv_list[1]}\'"
+        
         try:
             cur.execute(query)
         except pymysql.err.InternalError as error:
@@ -103,21 +111,41 @@ class TCPServerThread(threading.Thread):
             print(f"error code {code}: {msg}")
 
         user_pw = cur.fetchone()
-        
-        if not user_pw or recv_list[2] != user_pw:
+        if not user_pw or (recv_list[2],) != user_pw:
             self.sock.send("NO".encode())
         else:
             self.sock.send("OK".encode())
         
         con.close()
         return
+    
+    def id_check(self, recv_msg):
+        con, cur = con_db()
+        recv_list = recv_msg.split('/')
+        query = f"SELECT userid FROM user WHERE userid = \'{recv_list[1]}\'"
+        print(query)
+        try:
+            cur.execute(query)
+        except pymysql.err.InternalError as error:
+            code, msg = error.args
+            self.sock.send("sql_error".encode())
+            print(f"error code {code}: {msg}")
         
- 
+        result = cur.fetchone()
+        if not result:
+            self.sock.send("OK".encode())
+        else:
+            self.sock.send("NO".encode())
+        
+        con.close()
+                
+        
+    
     def signup(self, recv_msg):
         con, cur = con_db()
         recv_list = recv_msg.split('/')
         
-        query = f"INSERT INTO user(userid, userpw, username) VALUES({recv_list[1]}, {recv_list[2]}, {recv_list[3]}" 
+        query = f"INSERT INTO user(userid, userpw, username) VALUES(\'{recv_list[1]}\', \'{recv_list[2]}\', \'{recv_list[3]}\')" 
         try:
             cur.execute(query)
             con.commit()
@@ -136,6 +164,7 @@ class TCPServerThread(threading.Thread):
         name = [] 
         test = []
         #바이트로 바꾼 이미지 받는 부분
+        self.sock.send("send_image")
         byte_image = self.sock.recv(65536)
         for i in pr:
             # when break connection
@@ -156,7 +185,7 @@ class TCPServerThread(threading.Thread):
                 #cv2.imwrite(img_path,decimg)
 
                 for file in os.listdir(image_dir): 
-                    if (file.find('.png') is not -1):       
+                    if (file.find('.png') != -1):       
                         src.append(image_dir + file) 
                         name.append(file)
                 test.append(Dataization(image_dir + file)) 
@@ -165,10 +194,10 @@ class TCPServerThread(threading.Thread):
                 test = np.array(test) 
                 model = load_model('C:/Codes/opencv/Fish.h5') #사용할 모델 불러오기
                 predict = model.predict_classes(test)
-
+                
                 for i in range(len(test)): 
-                    print("결과" + " : "+ str(categories[predict[i]]))
-                    self.sock.send(categories[predict[i]].encode())
+                    print("결과" + " : "+ categories[predict[i]] + "/" + ko_categories[predict[i]])
+                    self.sock.send(ko_categories[predict[i]].encode())
                 cv2.waitKey(0)
                 break
             data = 1000
@@ -181,5 +210,5 @@ class TCPServerThread(threading.Thread):
         except:
              pass
 
-andRaspTCP = TCPServer("127.0.0.1", 4000)
+andRaspTCP = TCPServer(host, port)
 andRaspTCP.start()
