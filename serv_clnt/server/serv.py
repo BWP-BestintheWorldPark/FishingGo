@@ -3,6 +3,7 @@ import socket, threading
 import sys
 from PIL import Image
 import os
+from cv2 import imshow
 import numpy as np
 import cv2
 import h5py
@@ -21,16 +22,15 @@ categories = ["Tuna", "Sunfish", "Octopus", "Mackerel", "Cutlassfish"]
 ko_categories = ["참치", "개복치", "문어", "고등어", "갈치"]
 pr = ['height', 'width', '']
 
-image_dir = "C:/Codes/iim/" #테스트할 이미지 폴더 경로
-img_path = 'C:/Codes/iim/Image.png'
+# image_dir = "../../iim" #테스트할 이미지 폴더 경로
+# img_path = 'C:/Codes/iim/Image.png'
 sock_list = []
 # thread_list = []
 BUF_SIZE = 1024
 
-def Dataization(img_path): 
+def Dataization(img): 
     image_w = 28 
-    image_h = 28 
-    img = cv2.imread(img_path)
+    image_h = 28
     img = cv2.resize(img, None, fx=image_w/img.shape[1]*3, fy=image_h/img.shape[0]*3)
     return (img/256) 
   
@@ -163,41 +163,36 @@ class TCPServerThread(threading.Thread):
         test = []
         #바이트로 바꾼 이미지 받는 부분
         self.sock.send("send_image".encode())
-        byte_image = self.sock.recv(65536)
-        for i in pr:
-            # when break connection
-            if(i == ""):
-                data = np.fromstring(byte_image, dtype='uint8')
-                decimg=cv2.imdecode(data,1)
+        img_len = self.sock.recv(BUF_SIZE)
+        img_len = img_len.decode()
+        print("imglen: "+img_len)
+        byte_image = self.sock.recv(int(img_len))
 
-                cv2.imwrite(img_path,decimg)
-                gray = cv2.cvtColor(decimg, cv2.COLOR_RGB2GRAY)
-                ret, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
-                binary = cv2.bitwise_not(binary)
-                contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+        encode_data = np.frombuffer(byte_image, dtype= np.uint8)
+        decoded_img=cv2.imdecode(encode_data, cv2.IMREAD_COLOR)
 
-                for i in range(len(contours)):
-                    cv2.drawContours(decimg, [contours[i]], 0, (0, 0, 255), 2)
-                    cv2.putText(decimg, "", tuple(contours[i][0][0]), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 0), 1)
+        gray = cv2.cvtColor(decoded_img, cv2.COLOR_RGB2GRAY)
+        ret, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+        binary = cv2.bitwise_not(binary)
+        contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
 
-                #cv2.imwrite(img_path,decimg)
+        for i in range(len(contours)):
+            cv2.drawContours(decoded_img, [contours[i]], 0, (0, 0, 255), 2)
+            cv2.putText(decoded_img, "", tuple(contours[i][0][0]), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 0), 1)
 
-                for file in os.listdir(image_dir): 
-                    if (file.find('.png') != -1):       
-                        src.append(image_dir + file) 
-                        name.append(file)
-                test.append(Dataization(image_dir + file)) 
-
-                test = np.array(test) 
-                model = load_model('C:/Codes/opencv/Fish.h5') #사용할 모델 불러오기
-                predict = model.predict_classes(test)
-                
-                for i in range(len(test)): 
-                    print("결과" + " : "+ categories[predict[i]] + "/" + ko_categories[predict[i]])
-                    #self.sock.send(ko_categories[predict[i]].encode())
-                cv2.waitKey(0)
-                break
-            data = 1000
+        # for file in os.listdir(image_dir): 
+        #     if (file.find('.png') != -1):       
+        #         src.append(image_dir + file) 
+        #         name.append(file)
+        
+        test_arr = np.array(list(Dataization(decoded_img))) 
+        
+        model = load_model('../../opencv/Fish.h5') #사용할 모델 불러오기
+        predict = model.predict_classes(test_arr)
+        
+        print("결과" + " : "+ categories[predict[i]] + "/" + ko_categories[predict[i]])
+        #self.sock.send(ko_categories[predict[i]].encode())
+        
  
     def send(self, message):
         print('tcp server :: ',message)
@@ -206,6 +201,6 @@ class TCPServerThread(threading.Thread):
                 self.sock_list[i].sendall(message.encode())
         except:
              pass
-
-andRaspTCP = TCPServer(host, port)
-andRaspTCP.start()
+if __name__ == '__main__':
+    andRaspTCP = TCPServer(host, port)
+    andRaspTCP.start()

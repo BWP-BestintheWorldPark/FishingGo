@@ -4,6 +4,7 @@ from PIL import Image
 import os
 from array import array
 import cv2
+import numpy as np
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QThread, pyqtSlot
@@ -214,21 +215,28 @@ class load(QDialog):
         self.path_label.setText(self.image_path)    
 
     def send_btn_clicked(self):
+        if self.image_path == "":
+            QMessageBox().about(self, "error", "사진이 선택되지 않았습니다.")
+            return
+        
         sock.send("compare".encode())
         recv_msg = sock.recv(BUF_SIZE)
         recv_msg = recv_msg.decode()
-        if recv_msg.startswith("send_image"):
-            fd = open(self.image_path, "rb")
-            byte_image = bytearray(fd.read())
-            sock.sendall(byte_image) # 서버로 보내기
+        if recv_msg.startswith("send_image"):   
+            img = cv2.imread(self.image_path)
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+            result, imgencode = cv2.imencode('.jpg', img, encode_param)
+            data = np.array(imgencode)
+            string_image = data.tostring()
+            
+            sock.send(str(len(string_image)).encode())
+            sock.send(string_image) # 서버로 보내기
             print('바이트 이미지 전송 완료')
-            fd.close() 
     
     def exit_btn_clicked(self):
         self.close()
 
 if __name__ == '__main__':
-    #send_img()
     connect_server()
     app = QApplication(sys.argv)
     window = Login(); 
