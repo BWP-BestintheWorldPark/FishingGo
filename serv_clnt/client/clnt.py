@@ -149,6 +149,7 @@ class signup(QDialog):
             exit(1)
         else:
             QMessageBox().about(self, "아이디 중복", "중복되는 아이디입니다.\n 다시 시도해주세요.")
+            return
     
     def exit_btn_clicked(self):
         self.close()
@@ -192,13 +193,11 @@ class load(QDialog):
         super().__init__()
         self.ui = uic.loadUi("ui/load.ui", self)
         self.pixmap = QPixmap()
-        self.pixmap = self.pixmap.scaled(430, 330, Qt.KeepAspectRatio)
         self.image_path = ""
         
         self.load_btn.clicked.connect(self.load_btn_clicked)
         self.send_btn.clicked.connect(self.send_btn_clicked)
         self.exit_btn.clicked.connect(self.exit_btn_clicked)
-        
         
     def load_btn_clicked(self):
         image = QFileDialog.getOpenFileName(self, 'Fish Image Load', './picture', 'Image File(*.png *.jpg *.jpeg)')
@@ -210,13 +209,16 @@ class load(QDialog):
             return
         
         self.pixmap.load(self.image_path)
-        self.pic_label.setPixmap(self.pixmap)    
+        self.pixmap = self.pixmap.scaled(480, 490, Qt.KeepAspectRatio)
+        self.pic_label.setPixmap(self.pixmap) 
+        self.path_label.setText(self.image_path)    
 
     def send_btn_clicked(self):
         sock.send("compare".encode())
         recv_msg = sock.recv(BUF_SIZE)
-        if recv_msg == "send_image":
-            fd = open(resize_img_path, "rb")
+        recv_msg = recv_msg.decode()
+        if recv_msg.startswith("send_image"):
+            fd = open(self.image_path, "rb")
             byte_image = bytearray(fd.read())
             sock.sendall(byte_image) # 서버로 보내기
             print('바이트 이미지 전송 완료')
@@ -224,8 +226,7 @@ class load(QDialog):
     
     def exit_btn_clicked(self):
         self.close()
-        
-        
+
 if __name__ == '__main__':
     #send_img()
     connect_server()

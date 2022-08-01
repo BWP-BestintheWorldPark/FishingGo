@@ -139,8 +139,6 @@ class TCPServerThread(threading.Thread):
         
         con.close()
                 
-        
-    
     def signup(self, recv_msg):
         con, cur = con_db()
         recv_list = recv_msg.split('/')
@@ -164,7 +162,7 @@ class TCPServerThread(threading.Thread):
         name = [] 
         test = []
         #바이트로 바꾼 이미지 받는 부분
-        self.sock.send("send_image")
+        self.sock.send("send_image".encode())
         byte_image = self.sock.recv(65536)
         for i in pr:
             # when break connection
@@ -190,14 +188,13 @@ class TCPServerThread(threading.Thread):
                         name.append(file)
                 test.append(Dataization(image_dir + file)) 
 
-
                 test = np.array(test) 
                 model = load_model('C:/Codes/opencv/Fish.h5') #사용할 모델 불러오기
                 predict = model.predict_classes(test)
                 
                 for i in range(len(test)): 
                     print("결과" + " : "+ categories[predict[i]] + "/" + ko_categories[predict[i]])
-                    self.sock.send(ko_categories[predict[i]].encode())
+                    #self.sock.send(ko_categories[predict[i]].encode())
                 cv2.waitKey(0)
                 break
             data = 1000
