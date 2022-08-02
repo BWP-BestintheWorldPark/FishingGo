@@ -159,9 +159,15 @@ class main_window(QDialog):
     def __init__(self):
         super().__init__()
         self.ui = uic.loadUi("ui/main_window.ui", self)
-
+        
+        self.rank_table.setColumnWidth(0, self.width()*1/2)
+        self.rank_table.setColumnWidth(1, self.width()*1/2)
+        
         self.cap_btn.clicked.connect(self.cap_btn_clicked)
         self.upload_btn.clicked.connect(self.upload_btn_clicked)
+        self.refresh_btn.clicked.connect(self.refresh_btn_clicked)
+        
+        self.refresh_btn_clicked()
         
     def cap_btn_clicked(self):
         window = capture()
@@ -174,7 +180,26 @@ class main_window(QDialog):
         self.hide()
         window.exec_()
         self.show()
-  
+    
+    def refresh_btn_clicked(self):
+        fish_kind = self.fish_box.currentText()
+        send_msg = f"rank/{fish_kind}"
+        
+        sock.send(send_msg.encode())
+        id_msg = sock.recv(BUF_SIZE)
+        sock.send("OK".encode())
+        count_msg = sock.recv(BUF_SIZE)
+        id_msg = id_msg.decode()
+        count_msg = count_msg.decode()
+        
+        id_list = id_msg.split('/')
+        count_list = count_msg.split('/')
+        for i in range(len(id_list)):
+            self.rank_table.setItem(0, i, QTableWidgetItem(id_list[i]))
+        for i in range(len(count_list)):
+            self.rank_table.setItem(1, i, QTableWidgetItem(count_list[i]))
+        
+    
 class capture(QDialog):
     def __init__(self):
         super().__init__()

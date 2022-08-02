@@ -95,8 +95,11 @@ class TCPServerThread(threading.Thread):
                 self.id_check(recv_msg)
             elif recv_msg.startswith('signup/'):
                 self.signup(recv_msg)
+            elif recv_msg.startswith('rank/'):
+                self.send_rank()
             elif recv_msg.startswith('compare'):
                 self.compare_fish()
+            
                 
     def login(self, recv_msg):
         con, cur = con_db()
@@ -155,6 +158,33 @@ class TCPServerThread(threading.Thread):
         self.sock.send("OK".encode())
         con.close()
         return
+     
+    def send_rank(self, recv_msg):
+        con, cur = con_db()
+        recv_list = recv_msg.split('/')
+        id_msg = "id"
+        count_msg = "count"
+        
+        query = f"SELECT userid, fish_count FROM fish_record WHERE fishname = {recv_list[1]} ORDER BY fish_count DESC LIMIT 5"
+        try:
+            cur.execute(query)
+        except pymysql.err.InternalError as error:
+            code, msg = error.args
+            self.sock.send("sql_error".encode())
+            print(f"error code {code}: {msg}")
+            
+        result = cur.fetchall()
+        result = list(result)
+        for data in list:
+            id_msg = id_msg+"/"+data[0]
+            count_msg = count_msg+"/"+data[1]
+        self.sock.send(id_msg.encode())
+        check = self.sock.recv(BUF_SIZE)
+        if check == "OK":
+            self.sock.send(count_msg.encode())
+        con.close()
+        return
+            
                     
     def compare_fish(self):
         global test, name, src
